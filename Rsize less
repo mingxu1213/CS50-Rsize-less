@@ -1,0 +1,82 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include "bmp.h"
+
+int main(int args, char * argv[])
+{
+
+    if(args != 4)
+    {
+        fprintf(stderr, "Usage: ./resize f infile outfile\n");
+        return 2;
+    }
+    //if argv[1] could not be converted to integer, end programme.
+    int size = atoi(argv[1]);
+    if(size == 0)
+    {
+        fprintf(stderr, "Usage: ./resize f infile outfile\n");
+        return 2;
+    }
+    //if the file input by user could not be open or invalid, end programme.
+    FILE * readFile = fopen(argv[2], "r");
+    if(readFile == NULL)
+    {
+        fprintf(stderr, "Usage: ./resize f infile outfile\n");
+        return 2;
+    }
+    FILE * writeFile = fopen(argv[3], "w");
+    if(writeFile == NULL)
+    {
+        fprintf(stderr, "Usage: ./resize f infile outfile\n");
+        fclose(readFile);
+        return 2;
+    }
+    BITMAPFILEHEADER BF;
+    BITMAPINFOHEADER BI;
+    fread(&BF, sizeof(BITMAPFILEHEADER), 1, readFile);
+    fread(&BI, sizeof(BITMAPINFOHEADER), 1, readFile);
+    if((BF.bfType != 0x4d42) || (BF.bfOffBits != 54) || (BI.biSize != 40) || (BI.biBitCount != 24) || (BI.biCompression != 0))
+    {
+        fprintf(stderr, "Usage: ./resize f infile outfile\n");
+        fclose(readFile);
+        fclose(writeFile);
+        return 2;
+    }
+    int originWidth = BI.biWidth;
+    int originHeight = BI.biHeight;
+    int paddingOld = (4 - (BI.biWidth * sizeof(RGBTRIPLE) % 4)) % 4;
+    BI.biWidth = BI.biWidth * size;
+    int paddingNew = (4 - (BI.biWidth * sizeof(RGBTRIPLE) % 4)) % 4;
+    BI.biHeight = BI.biHeight * size;
+    //Get the image size for the new file header.
+    BI.biSizeImage = (sizeof(RGBTRIPLE) * BI.biWidth + paddingNew) * abs(BI.biHeight);
+    BF.bfSize = BI.biSizeImage + 54;
+    fwrite(&BF, sizeof(BITMAPFILEHEADER), 1, writeFile);
+    fwrite(&BI, sizeof(BITMAPINFOHEADER), 1, writeFile);
+    for(int i = 0; i < abs(originHeight); i++)
+    {
+        for(int s = 0; s < size; s++)
+        {
+            for(int j = 0; j < originWidth; j++)
+            {
+                RGBTRIPLE ptr;
+                fread(&ptr, sizeof(RGBTRIPLE), 1, readFile);
+                for(int x = 0; x < size; x++)
+                {
+                    fwrite(&ptr, sizeof(RGBTRIPLE), 1, writeFile);
+                }
+            }
+            for(int q = 0; q < paddingNew; q++)
+            {
+                fputc(0x00, writeFile);
+            }
+            if(s < size - 1)
+            {
+                fseek(readFile, -originWidth * sizeof(RGBTRIPLE), SEEK_CUR);
+            }
+        }
+        fseek(readFile, paddingOld, SEEK_CUR);
+    }
+    fclose(readFile);
+    fclose(writeFile);
+}
